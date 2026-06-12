@@ -1,0 +1,56 @@
+{
+  "variant": "baseline",
+  "seed": 1,
+  "overall_metrics": {
+    "mse": 0.005395160387400712,
+    "mse_de": 0.22160424617941657,
+    "pearson": 0.9836283326148987,
+    "pearson_de": 0.8478305807737546,
+    "mse_high_score": 0.014304459707081779,
+    "pearson_high_score": 0.9569771739569959,
+    "mse_de_high_score": 0.6562712137808198,
+    "pearson_de_high_score": 0.8214251825319171
+  },
+  "subgroup_metrics": {
+    "combo_seen0": {
+      "mse": 0.006399116292595863,
+      "pearson": 0.9804267287254333,
+      "mse_de": 0.2280363840982318,
+      "pearson_de": 0.7387536644935608,
+      "mse_high_score": 0.021540313586592676,
+      "pearson_high_score": 0.9352881228987293,
+      "mse_de_high_score": 0.7635661065578461,
+      "pearson_de_high_score": 0.8122065739500843
+    },
+    "combo_seen1": {
+      "mse": 0.005683196310807641,
+      "pearson": 0.9827522933483124,
+      "mse_de": 0.24424251913054226,
+      "pearson_de": 0.8668179338177046,
+      "mse_high_score": 0.013199260700882101,
+      "pearson_high_score": 0.9608311674720134,
+      "mse_de_high_score": 0.6004348117858171,
+      "pearson_de_high_score": 0.8365274567914268
+    },
+    "combo_seen2": {
+      "mse": 0.00581017879044844,
+      "pearson": 0.9826275242699517,
+      "mse_de": 0.27282730489969254,
+      "pearson_de": 0.9129962126413981,
+      "mse_high_score": 0.014384165302746825,
+      "pearson_high_score": 0.9569776368374071,
+      "mse_de_high_score": 0.5897916770643659,
+      "pearson_de_high_score": 0.8286278961190847
+    },
+    "unseen_single": {
+      "mse": 0.002957454248994159,
+      "pearson": 0.9909874808329803,
+      "mse_de": 0.2052831619803328,
+      "pearson_de": 0.8878391213141955,
+      "mse_high_score": 0.010218316017506788,
+      "pearson_high_score": 0.968300480726395,
+      "mse_de_high_score": 0.5566301210425221,
+      "pearson_de_high_score": 0.8170501346937041
+    }
+  }
+}

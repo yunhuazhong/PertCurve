@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pertcurve"
+version = "0.1.0"
+description = "Trajectory-based perturbation scoring for single-cell perturbation data."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+  {name = "Yunhua Zhong"},
+  {name = "Lifei Wang"},
+  {name = "Gui Yang"},
+  {name = "Lequan Yu"},
+  {name = "Xiaojuan Qi"},
+  {name = "Haibo Jiang"}
+]
+dependencies = [
+  "numpy",
+  "pandas",
+  "scipy",
+  "scikit-learn",
+  "scanpy",
+  "anndata",
+  "matplotlib",
+  "statsmodels",
+  "joblib",
+  "PyYAML",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest",
+]
+gears = [
+  "torch",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
