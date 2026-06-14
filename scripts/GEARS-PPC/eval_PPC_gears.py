@@ -29,6 +29,21 @@ import torch
 
 
 CHECKPOINT_RE = re.compile(r"^(?P<seed>\d+)_(?P<variant>[A-Za-z0-9_\-]+)\.pt$")
+NATURE_HEX_COLORS = [
+    "#2664BF",
+    "#34A89A",
+    "#F69CA9",
+    "#FBD399",
+    "#AD95D1",
+    "#FEA992",
+]
+PLOT_SUBGROUPS = ["combo_seen0", "combo_seen1", "combo_seen2", "unseen_single"]
+PLOT_SUBGROUP_LABELS = {
+    "combo_seen0": "0/2 seen",
+    "combo_seen1": "1/2 seen",
+    "combo_seen2": "2/2 seen",
+    "unseen_single": "unseen single",
+}
 
 
 @dataclass(frozen=True)
@@ -92,6 +107,181 @@ def load_manifest(run_dir: Path) -> Dict:
     if not manifest_path.exists():
         return {}
     return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def init_plotting():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    sns.set_theme(style="white", context="paper", rc={"figure.figsize": (6, 3)})
+    plt.rcParams["svg.fonttype"] = "none"
+    plt.rcParams["font.size"] = 10
+    return plt, sns
+
+
+def load_plot_data(eval_dir: Path):
+    import pandas as pd
+
+    data_records = []
+    per_run_dir = eval_dir / "per_run"
+    if not per_run_dir.exists():
+        per_run_dir = eval_dir / "eval_oracle" / "per_run"
+
+    for variant in ["baseline", "dual"]:
+        for path in sorted(per_run_dir.glob(f"{variant}_seed*.json")):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            seed = data.get("seed", 0)
+            for subgroup, metrics in data.get("subgroup_metrics", {}).items():
+                if subgroup not in PLOT_SUBGROUPS:
+                    continue
+                data_records.append(
+                    {
+                        "variant": "w/o PertCurve" if variant == "baseline" else "w/ PertCurve",
+                        "seed": seed,
+                        "subgroup": subgroup,
+                        "MSE(DE)": metrics.get("mse_de"),
+                        "Pearson(DE)": metrics.get("pearson_de"),
+                        "MSE": metrics.get("mse"),
+                        "Pearson": metrics.get("pearson"),
+                        "MSE(DE)_high_score": metrics.get("mse_de_high_score"),
+                        "Pearson(DE)_high_score": metrics.get("pearson_de_high_score"),
+                        "MSE_high_score": metrics.get("mse_high_score"),
+                        "Pearson_high_score": metrics.get("pearson_high_score"),
+                    }
+                )
+    return pd.DataFrame(data_records)
+
+
+def plot_metric_pair(
+    df,
+    output_dir: Path,
+    filename_stem: str,
+    left_metric: str,
+    right_metric: str,
+    left_title: str,
+    right_title: str,
+    left_ylabel: str,
+    right_ylabel: str,
+    left_ylim,
+    right_ylim,
+    left_yticks,
+    right_yticks,
+) -> None:
+    plt, sns = init_plotting()
+    fig, axes = plt.subplots(1, 2, figsize=(6.5, 3))
+    fig.subplots_adjust(wspace=0.25)
+
+    plot_kwargs = {
+        "data": df,
+        "x": "Subgroup",
+        "hue": "variant",
+        "palette": [NATURE_HEX_COLORS[0], NATURE_HEX_COLORS[1]],
+        "errorbar": "se",
+        "capsize": 0.12,
+        "err_kws": {"linewidth": 1},
+    }
+    sns.barplot(y=left_metric, ax=axes[0], **plot_kwargs)
+    axes[0].set_title(left_title)
+    axes[0].set_ylabel(left_ylabel)
+    axes[0].set_xlabel("")
+    axes[0].tick_params(axis="x", rotation=15)
+    axes[0].legend(title="", frameon=False, loc="upper center", fontsize=8)
+    axes[0].set_ylim(*left_ylim)
+    axes[0].set_yticks(left_yticks)
+    axes[0].set_yticklabels(left_yticks)
+
+    sns.barplot(y=right_metric, ax=axes[1], **plot_kwargs)
+    axes[1].set_title(right_title)
+    axes[1].set_ylabel(right_ylabel)
+    axes[1].set_xlabel("")
+    axes[1].tick_params(axis="x", rotation=15)
+    axes[1].legend(title="", frameon=False, loc="upper center", fontsize=8)
+    axes[1].set_ylim(*right_ylim)
+    axes[1].set_yticks(right_yticks)
+    axes[1].set_yticklabels(right_yticks)
+
+    plt.tight_layout()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    svg_path = output_dir / f"{filename_stem}.svg"
+    png_path = output_dir / f"{filename_stem}.png"
+    plt.savefig(svg_path, bbox_inches="tight", pad_inches=0.05, transparent=False)
+    plt.savefig(png_path, bbox_inches="tight", pad_inches=0.05, dpi=300, transparent=False)
+    plt.close()
+    print(f"Saved figures to {svg_path} and {png_path}")
+
+
+def plot_comparison_outputs(eval_dir: Path) -> None:
+    df = load_plot_data(eval_dir)
+    if df.empty:
+        print(f"No per-run subgroup metrics found for plotting under {eval_dir}")
+        return
+
+    df["Subgroup"] = df["subgroup"].map(PLOT_SUBGROUP_LABELS)
+    output_dir = eval_dir / "performance"
+
+    plot_metric_pair(
+        df=df,
+        output_dir=output_dir,
+        filename_stem="subgroup_metrics_comparison",
+        left_metric="MSE(DE)",
+        right_metric="Pearson(DE)",
+        left_title="MSE (DE)",
+        right_title="Pearson Correlation (DE)",
+        left_ylabel="MSE (DE)",
+        right_ylabel="Pearson (DE)",
+        left_ylim=(0.1, 0.7),
+        right_ylim=(0.6, 1.0),
+        left_yticks=[0.1, 0.3, 0.5, 0.7],
+        right_yticks=[0.6, 0.7, 0.8, 0.9, 1],
+    )
+    plot_metric_pair(
+        df=df,
+        output_dir=output_dir,
+        filename_stem="subgroup_metrics_comparison_all",
+        left_metric="MSE",
+        right_metric="Pearson",
+        left_title="MSE",
+        right_title="Pearson Correlation",
+        left_ylabel="MSE",
+        right_ylabel="Pearson",
+        left_ylim=(0, 0.03),
+        right_ylim=(0.94, 1.0),
+        left_yticks=[0, 0.01, 0.02, 0.03],
+        right_yticks=[0.94, 0.96, 0.98, 1.0],
+    )
+    plot_metric_pair(
+        df=df,
+        output_dir=output_dir,
+        filename_stem="subgroup_metrics_comparison_high_score_de",
+        left_metric="MSE(DE)_high_score",
+        right_metric="Pearson(DE)_high_score",
+        left_title="MSE (DE) (Strength > 0.5)",
+        right_title="Pearson Correlation (DE) (Strength > 0.5)",
+        left_ylabel="MSE (DE)",
+        right_ylabel="Pearson (DE)",
+        left_ylim=(0.2, 1.0),
+        right_ylim=(0.6, 1.0),
+        left_yticks=[0.2, 0.4, 0.6, 0.8, 1.0],
+        right_yticks=[0.6, 0.7, 0.8, 0.9, 1.0],
+    )
+    plot_metric_pair(
+        df=df,
+        output_dir=output_dir,
+        filename_stem="subgroup_metrics_comparison_high_score_all",
+        left_metric="MSE_high_score",
+        right_metric="Pearson_high_score",
+        left_title="MSE (Strength > 0.5)",
+        right_title="Pearson Correlation (Strength > 0.5)",
+        left_ylabel="MSE",
+        right_ylabel="Pearson",
+        left_ylim=(0, 0.03),
+        right_ylim=(0.92, 1.0),
+        left_yticks=[0, 0.01, 0.02, 0.03],
+        right_yticks=[0.92, 0.94, 0.96, 0.98, 1.0],
+    )
 
 
 def discover_checkpoints(models_dir: Path) -> List[CheckpointInfo]:
@@ -465,6 +655,11 @@ def main() -> None:
         default=default_results_dir / "eval",
         help="Directory to save aggregated evaluation outputs (CSV/JSON).",
     )
+    parser.add_argument(
+        "--skip-plots",
+        action="store_true",
+        help="Skip subgroup comparison plots after evaluation.",
+    )
     args = parser.parse_args()
 
     run_dir = args.run_dir.resolve()
@@ -574,6 +769,8 @@ def main() -> None:
     )
 
     print(f"Saved evaluation outputs to {out_dir}")
+    if not args.skip_plots:
+        plot_comparison_outputs(out_dir)
 
 
 if __name__ == "__main__":

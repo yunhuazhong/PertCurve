@@ -1,64 +1,82 @@
-# PertCurve and GEARS-PPC
+# PertCurve
 
-This directory contains the public code for PertCurve, a Perturbation Principal Curve (PPC) method for scoring single-cell perturbation responses, and GEARS-PPC, a score-aware GEARS workflow that uses PertCurve/PPC scores during perturbation-response prediction.
+[![Python](https://img.shields.io/badge/python-%3E%3D3.9-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](#license)
 
-PertCurve fits a low-dimensional principal curve between control cells and each perturbation, projects cells onto that curve, and reports a normalized pseudotime-like perturbation score. In the GEARS experiments, this score is used as a per-cell perturbation strength signal, stored as `adata.obs["perturbation_score"]`, and passed to a modified GEARS model through each graph's `pert_score` field.
+**PertCurve** is a trajectory-based perturbation scoring framework for single-cell perturbation data. It fits a principal curve from control cells to each perturbation, projects cells onto the fitted trajectory, and reports a normalized perturbation-response score for every cell.
 
-## What Is PPC?
+This repository also includes **GEARS-PPC**, a score-aware GEARS workflow that uses PertCurve scores as continuous perturbation-strength signals during transcriptional response prediction.
 
-PPC is the PertCurve perturbation-principal-curve score. It summarizes where each cell lies along a fitted control-to-perturbation trajectory:
+## Overview
 
-- cells close to the control centroid receive low scores;
-- cells farther along the perturbation trajectory receive higher scores;
-- each perturbation receives both per-cell scores and distribution-level distance summaries.
+PertCurve summarizes heterogeneous single-cell perturbation responses with a pseudotime-like **Perturbation Principal Curve (PPC)** score:
 
-This gives GEARS more than a binary perturbation label. Instead of treating every cell assigned to the same perturbation as equally strong, GEARS-PPC can condition its perturbation pathway on a continuous response score.
+- control-like cells receive low scores;
+- cells farther along the fitted control-to-perturbation trajectory receive higher scores;
+- each perturbation receives per-cell projection scores and perturbation-level distance summaries.
 
-## Repository Layout
+In the GEARS-PPC workflow, these scores are stored in `adata.obs["perturbation_score"]` and attached to each GEARS graph as `graph.pert_score`. The local GEARS fork can then condition its perturbation pathway on continuous response strength rather than using only a binary perturbation label.
 
-```text
-public_sources/code/
-|-- src/pertcurve/              # Core PertCurve/PPC implementation
-|-- src/GEARS-PPC/              # Local GEARS fork with PPC score gating
-|-- src/mixscale-py/            # Bundled Mixscale reference code
-|-- scripts/PertCurve/          # CLI for generating PPC scores
-|-- scripts/GEARS-PPC/          # Train, evaluate, and plot GEARS-PPC runs
-|-- tests/                      # Unit tests for PertCurve components
-`-- results/                    # Example/generated outputs
-```
+## Key Features
 
-Large datasets are not part of this code package. The companion dataset tree is expected at `../dataset/` when using the default command-line paths.
+- Fits perturbation-specific principal curves in PCA space.
+- Produces per-cell normalized PPC scores, projection distances, and curve coordinates.
+- Reports perturbation-level Wasserstein distance, KL divergence, curve length, endpoint distance, and cell counts.
+- Provides plotting utilities for PC1/PC2 trajectory visualization.
+- Includes downstream utilities for trajectory quality metrics, response trends, dose-response-style fitting, and response archetype summaries.
+- Includes a local GEARS-PPC workflow for comparing baseline GEARS against PPC-aware perturbation prediction.
 
 ## Installation
 
-Install the PertCurve package from this directory:
+Clone the repository and install the package in editable mode:
 
 ```bash
-cd /home/yhzhong/projects/singlecell/reverse-perturb/public_sources/code
+git clone <this-repository-url>
+cd PertCurve
 pip install -e .
 ```
 
-For tests:
+For development and tests:
 
 ```bash
 pip install -e ".[test]"
 pytest
 ```
 
-For GEARS-PPC, install PyTorch and PyTorch Geometric for your CUDA or CPU environment, then install the local GEARS fork if needed:
+For GEARS-PPC experiments, install PyTorch and PyTorch Geometric for your CUDA or CPU environment, then install the additional requirements and local GEARS fork:
 
 ```bash
 pip install -r requirements-gears.txt
 pip install -e src/GEARS-PPC
 ```
 
-PyTorch Geometric installation is environment-specific; follow the wheel selector from the PyG documentation if the generic requirements install does not match your CUDA version.
+PyTorch Geometric wheels are environment-specific. If installation fails, follow the official PyG wheel selector for your Python, PyTorch, CUDA, and operating-system versions.
 
-## Generate PPC Scores
+## Quick Start
 
-Run PertCurve on an AnnData object with one perturbation label column and one control label. The script writes one score table per perturbation plus summary metrics.
+Run PertCurve on an AnnData object with one perturbation label column and one control label:
 
-Norman-style example:
+```bash
+python scripts/PertCurve/run_pertcurve.py \
+  --input-h5ad path/to/processed_dataset.h5ad \
+  --perturbation-col perturbation \
+  --control-label control \
+  --out-dir results/pertcurve \
+  --n-pcs 50 \
+  --n-bins 20 \
+  --smoothing 0.3 \
+  --plot
+```
+
+The `--plot` flag saves PNG trajectory plots. Without it, PertCurve writes only CSV outputs.
+
+## Data
+
+Associated data files are available on Zenodo:
+
+- [https://zenodo.org/records/20643438](https://zenodo.org/records/20643438)
+
+### Norman Example
 
 ```bash
 python scripts/PertCurve/run_pertcurve.py \
@@ -72,7 +90,7 @@ python scripts/PertCurve/run_pertcurve.py \
   --plot
 ```
 
-Replogle-style example:
+### Replogle Example
 
 ```bash
 python scripts/PertCurve/run_pertcurve.py \
@@ -86,53 +104,42 @@ python scripts/PertCurve/run_pertcurve.py \
   --plot
 ```
 
-The `--plot` flag is required to save PNG trajectory figures. Without it, only CSV outputs are produced.
-
-## PertCurve Outputs
+## Output Files
 
 For each run, `scripts/PertCurve/run_pertcurve.py` writes:
 
-- `projections/projection_<perturbation>.csv`: per-cell `normalized_pseudotime`, arc length, projection distance, and PC1/PC2 coordinates.
-- `perturbation_distance_stats.csv`: perturbation-level Wasserstein distance, KL divergence, curve length, endpoint distance, and cell counts.
-- `figures/projection_<perturbation>.png`: optional PC1/PC2 trajectory plots when `--plot` is enabled.
+| Path | Description |
+| --- | --- |
+| `projections/projection_<perturbation>.csv` | Per-cell `normalized_pseudotime`, arc length, projection distance, and PC1/PC2 coordinates. |
+| `perturbation_distance_stats.csv` | Perturbation-level Wasserstein distance, KL divergence, curve length, endpoint distance, and cell counts. |
+| `figures/projection_<perturbation>.png` | Optional PC1/PC2 trajectory plot when `--plot` is enabled. |
 
 These outputs can be used directly for trajectory analysis, downstream response modeling, or as the score source for GEARS-PPC.
 
-## Apply PPC Scores To GEARS
+## GEARS-PPC Workflow
 
-GEARS-PPC expects a GEARS-formatted AnnData file with:
+GEARS-PPC expects a GEARS-formatted AnnData object with:
 
 - `adata.obs["condition"]`: GEARS perturbation condition label, such as `TP73+ctrl`;
 - `adata.obs["condition_name"]`: full perturbation name used by GEARS metadata;
-- `adata.obs["perturbation_score"]`: the PPC score for each cell.
+- `adata.obs["perturbation_score"]`: the PertCurve/PPC score for each cell.
 
-The Norman dataset in the companion data tree already includes a scored file:
+The Norman dataset in the companion data tree includes a scored example:
 
 ```text
 ../dataset/GEARS/norman/perturb_processed_with_scores.h5ad
 ```
 
-If you need to rebuild it from projection CSVs, use the dataset-side helper as a template:
+If you need to rebuild the scored GEARS input from projection CSV files, use the dataset-side helper as a template:
 
 ```bash
 cd /home/yhzhong/projects/singlecell/reverse-perturb/public_sources/dataset/GEARS/process_script
 python assign_scores_to_h5ad.py
 ```
 
-That script maps PertCurve `normalized_pseudotime` values into `adata.obs["perturbation_score"]` and writes a GEARS-ready `.h5ad`. Check its path constants before running it on a new dataset.
+Review the path constants in that script before running it on a new dataset.
 
-## How GEARS-PPC Uses The Score
-
-The local GEARS fork in `src/GEARS-PPC` modifies the GEARS perturbation pathway:
-
-- the training script attaches `adata.obs["perturbation_score"]` to each graph as `graph.pert_score`;
-- the PPC model reads `data.pert_score` in `src/GEARS-PPC/gears/model.py`;
-- a residual score gate scales the perturbation embedding, allowing the model to attenuate or amplify the perturbation effect based on PPC strength;
-- the `baseline` variant removes scores, while the `dual` variant keeps score-aware gating.
-
-This makes the comparison explicit: vanilla GEARS versus GEARS with continuous PertCurve/PPC response information.
-
-## Train GEARS-PPC
+### Train
 
 The main training script compares `baseline` and `dual` variants by default:
 
@@ -150,14 +157,14 @@ python scripts/GEARS-PPC/train_PPC_gears.py \
   --output-dir results/gears_PPC
 ```
 
-Outputs are written to a timestamped run directory under `results/gears_PPC/`:
+The script writes timestamped run directories under `results/gears_PPC/`, including:
 
 - `manifest.json`: run configuration;
 - `per_run/*.json`: metrics for each variant and seed;
 - `models/<seed>_<variant>.pt`: saved checkpoints;
-- `all_runs.csv`, `summary.json`, and paired baseline-vs-dual test results.
+- `all_runs.csv`, `summary.json`, and paired baseline-versus-dual test results.
 
-## Evaluate Checkpoints
+### Evaluate
 
 Evaluate saved checkpoints and aggregate per-perturbation metrics:
 
@@ -173,7 +180,7 @@ python scripts/GEARS-PPC/eval_PPC_gears.py \
 
 Evaluation writes per-model metrics, averaged per-perturbation summaries, high-score subset metrics, and JSON/CSV outputs suitable for downstream plotting.
 
-## Plot GEARS-PPC Predictions
+### Plot
 
 Plot baseline and PPC-aware predictions for selected perturbations:
 
@@ -184,22 +191,16 @@ python scripts/GEARS-PPC/plot_PPC_gears.py \
   --dataset-name norman \
   --pretrained-model-dir results/gears_PPC/models/1_baseline.pt results/gears_PPC/models/1_dual.pt \
   --model-labels baseline dual \
-  --perturbations TP73+ctrl \
+  --perturbation TP73+ctrl \
   --device auto \
   --output-dir results/gears_PPC/figures
 ```
 
-When two models are supplied, the plotting script saves an all-ground-truth-cell panel and, if scores are available, a high-score-cell panel.
+When two models are supplied, the plotting script saves an all-ground-truth-cell panel and, when scores are available, a high-score-cell panel.
 
-## Analysis Utilities
+## Python API
 
-The core `pertcurve` package also includes modules for quality checks and downstream response analysis:
-
-- `pertcurve.metrics`: smoothness, reconstruction, mutual information, and kNN-overlap metrics for trajectory quality.
-- `pertcurve.downstream`: binned response trends, Hill/log-logistic response fitting, and response archetype summaries.
-- `pertcurve.plotting`: PC1/PC2 projection figures for PertCurve runs.
-
-Example:
+PertCurve modules can also be used directly from Python:
 
 ```python
 from pertcurve.metrics import evaluate_trajectory_quality
@@ -211,9 +212,54 @@ metrics = evaluate_trajectory_quality(
 )
 ```
 
+Important modules include:
+
+- `pertcurve.curve`: principal-curve fitting utilities;
+- `pertcurve.projection`: projection and trajectory coordinate utilities;
+- `pertcurve.scoring`: perturbation-level PPC scoring;
+- `pertcurve.metrics`: trajectory quality and neighborhood-overlap metrics;
+- `pertcurve.downstream`: response trend, Hill/log-logistic fitting, and response archetype utilities;
+- `pertcurve.plotting`: PC1/PC2 projection figures.
+
+## Repository Layout
+
+```text
+PertCurve/
+|-- src/pertcurve/              # Core PertCurve implementation
+|-- src/GEARS-PPC/              # Local score-aware GEARS fork
+|-- src/mixscale-py/            # Bundled Mixscale reference code
+|-- scripts/PertCurve/          # PertCurve scoring scripts
+|-- scripts/GEARS-PPC/          # GEARS-PPC training, evaluation, and plotting scripts
+|-- tests/                      # Unit tests
+|-- results/                    # Example or generated outputs
+|-- requirements.txt            # Core runtime requirements
+|-- requirements-gears.txt      # GEARS-PPC requirements
+`-- pyproject.toml              # Package metadata
+```
+
+Large raw datasets, long logs, and external reference repositories are not included. The command examples assume a companion dataset tree at `../dataset/`; override command-line paths when using a different layout.
+
+## Testing
+
+Run the test suite with:
+
+```bash
+pytest
+```
+
+The tests cover core curve fitting, downstream summaries, multiple-testing utilities, trajectory metrics, and GEARS/PertCurve integration points.
+
 ## Notes
 
-- This release intentionally excludes large raw datasets, long logs, and external reference repositories.
 - `src/GEARS-PPC` is a local score-aware GEARS fork, not the upstream GEARS package.
-- GEARS-PPC requires `adata.obs["perturbation_score"]`; missing scores will raise an error in the score-aware path.
+- GEARS-PPC requires `adata.obs["perturbation_score"]` in score-aware paths.
 - For leakage-free held-out evaluation, avoid using true test-cell PPC scores as test-time side information. The evaluation script assigns a constant score of `0.5` to non-baseline test graphs.
+- The default command-line paths are examples. Check dataset paths before running workflows on a new machine or dataset.
+
+## Citation
+
+If you use PertCurve or GEARS-PPC in your work, please cite the corresponding project or manuscript when available.
+
+## License
+
+This project is distributed under the MIT license, as declared in `pyproject.toml`.

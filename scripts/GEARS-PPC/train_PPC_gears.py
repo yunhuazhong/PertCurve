@@ -274,12 +274,12 @@ def main() -> None:
     # compare vanilla GEARS (baseline) vs score-augmented GEARS (dual).
     parser.add_argument("--variants", type=str, default="baseline,dual")
     parser.add_argument("--seeds", type=str, default="1")
-    parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--hidden-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--device", type=str, default="auto")
-    parser.add_argument("--output-dir", type=Path, default=Path("/home/yhzhong/projects/singlecell/reverse-perturb/public_sources/code/results/gears_PPC"))
+    parser.add_argument("--output-dir", type=Path, default=project_root / "results" / "gears_PPC")
     args = parser.parse_args()
 
     ensure_local_gears_import(args.gears_root)
